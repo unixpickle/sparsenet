@@ -58,7 +58,7 @@ func main() {
 		A: 0xff,
 	})
 
-	output := resize.Resize(300, 300, outImage, resize.Bilinear)
+	output := resize.Resize(300, 300, outImage, resize.NearestNeighbor)
 
 	f, err := os.Create(os.Args[4])
 	if err != nil {
