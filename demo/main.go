@@ -44,12 +44,12 @@ func main() {
 }
 
 func createNet(d mnist.DataSet) neuralnet.Network {
-	layer1 := sparsenet.NewLayerUnbiased(28*28, 1000, 300)
-	layer2 := sparsenet.NewLayer(layer1, 2000, 100, 1)
-	layer3 := sparsenet.NewLayer(layer2, 3000, 50, 0.8)
-	layer4 := sparsenet.NewLayer(layer3, 5000, 30, 0.3)
-	layer5 := sparsenet.NewLayer(layer4, 2000, 70, 0.5)
-	layer6 := sparsenet.NewLayer(layer5, 500, 300, 1)
+	layer1 := sparsenet.NewLayerUnbiased(28*28, 1000, 100)
+	layer2 := sparsenet.NewLayer(layer1, 2000, 30, 1)
+	layer3 := sparsenet.NewLayer(layer2, 3000, 20, 0.8)
+	layer4 := sparsenet.NewLayer(layer3, 5000, 10, 0.3)
+	layer5 := sparsenet.NewLayer(layer4, 2000, 10, 0.5)
+	layer6 := sparsenet.NewLayer(layer5, 500, 50, 1)
 	outLayer := &neuralnet.DenseLayer{
 		InputCount:  500,
 		OutputCount: 10,
