@@ -1,12 +1,19 @@
 package sparsenet
 
 import (
+	"encoding/json"
 	"math"
 	"math/rand"
 
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
+	"github.com/unixpickle/serializer"
 )
+
+func init() {
+	var l Layer
+	serializer.RegisterTypedDeserializer(l.SerializerType(), DeserializeLayer)
+}
 
 // Coordinate represents a neuron's location in 3-space.
 // Neurons will typically be stored in a 1x1x1 cube.
@@ -39,6 +46,15 @@ type Layer struct {
 
 	// Biases stores one bias value per output neuron.
 	Biases *autofunc.Variable
+}
+
+// DeserializeLayer deserializes a Layer.
+func DeserializeLayer(d []byte) (*Layer, error) {
+	var l Layer
+	if err := json.Unmarshal(d, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
 }
 
 // NewLayerUnbiased creates a Layer with randomly placed
@@ -174,6 +190,22 @@ func (l *Layer) ApplyR(rv autofunc.RVector, in autofunc.RResult) autofunc.RResul
 		ROutputVec: outputR,
 		Input:      in,
 	}
+}
+
+// Parameters returns the internal parameters of the layer.
+func (l *Layer) Parameters() []*autofunc.Variable {
+	return []*autofunc.Variable{l.Weights, l.Biases}
+}
+
+// SerializerType returns the unique ID used to serialize
+// a Layer with the serializer package.
+func (l *Layer) SerializerType() string {
+	return "github.com/unixpickle/sparsenet.Layer"
+}
+
+// Serialize serializes the layer.
+func (l *Layer) Serialize() ([]byte, error) {
+	return json.Marshal(l)
 }
 
 type layerResult struct {
