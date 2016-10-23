@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/unixpickle/autofunc"
+	"github.com/unixpickle/num-analysis/linalg"
 )
 
 // Coordinate represents a neuron's location in 3-space.
@@ -117,4 +118,175 @@ func NewLayer(in *Layer, outCount, connCount int, spread float64) *Layer {
 		}
 	}
 	return res
+}
+
+// Apply applies the layer to an input vector.
+func (l *Layer) Apply(in autofunc.Result) autofunc.Result {
+	inVec := in.Output()
+	output := make(linalg.Vector, len(l.Indices))
+	weights := l.Weights.Vector
+	var weightIdx int
+	for outIdx, indices := range l.Indices {
+		for _, inIdx := range indices {
+			weight := weights[weightIdx]
+			weightIdx++
+			output[outIdx] += weight * inVec[inIdx]
+		}
+	}
+	output.Add(l.Biases.Vector)
+	return &layerResult{
+		Layer:     l,
+		OutputVec: output,
+		Input:     in,
+	}
+}
+
+// ApplyR is like Apply, but for RResults.
+func (l *Layer) ApplyR(rv autofunc.RVector, in autofunc.RResult) autofunc.RResult {
+	inVec := in.Output()
+	inVecR := in.ROutput()
+
+	output := make(linalg.Vector, len(l.Indices))
+	outputR := make(linalg.Vector, len(l.Indices))
+
+	weightsRVar := autofunc.NewRVariable(l.Weights, rv)
+	biasesRVar := autofunc.NewRVariable(l.Biases, rv)
+
+	weights := weightsRVar.Output()
+	weightsR := weightsRVar.ROutput()
+	var weightIdx int
+	for outIdx, indices := range l.Indices {
+		for _, inIdx := range indices {
+			weight := weights[weightIdx]
+			weightR := weightsR[weightIdx]
+			weightIdx++
+			output[outIdx] += weight * inVec[inIdx]
+			outputR[outIdx] += weightR*inVec[inIdx] + weight*inVecR[inIdx]
+		}
+	}
+	output.Add(biasesRVar.Output())
+	outputR.Add(biasesRVar.ROutput())
+	return &layerRResult{
+		Layer:      l,
+		RWeights:   weightsRVar,
+		RBiases:    biasesRVar,
+		OutputVec:  output,
+		ROutputVec: outputR,
+		Input:      in,
+	}
+}
+
+type layerResult struct {
+	Layer     *Layer
+	OutputVec linalg.Vector
+	Input     autofunc.Result
+}
+
+func (l *layerResult) Output() linalg.Vector {
+	return l.OutputVec
+}
+
+func (l *layerResult) Constant(g autofunc.Gradient) bool {
+	return l.Layer.Weights.Constant(g) && l.Layer.Biases.Constant(g) &&
+		l.Input.Constant(g)
+}
+
+func (l *layerResult) PropagateGradient(upstream linalg.Vector, g autofunc.Gradient) {
+	l.Layer.Biases.PropagateGradient(upstream, g)
+	if gradVec, ok := g[l.Layer.Weights]; ok {
+		inputs := l.Input.Output()
+		var weightIdx int
+		for outIdx, indices := range l.Layer.Indices {
+			outDeriv := upstream[outIdx]
+			for _, inIdx := range indices {
+				gradVec[weightIdx] += inputs[inIdx] * outDeriv
+				weightIdx++
+			}
+		}
+	}
+	if !l.Input.Constant(g) {
+		downstream := make(linalg.Vector, len(l.Input.Output()))
+		var weightIdx int
+		weights := l.Layer.Weights.Vector
+		for outIdx, indices := range l.Layer.Indices {
+			outDeriv := upstream[outIdx]
+			for _, inIdx := range indices {
+				downstream[inIdx] += weights[weightIdx] * outDeriv
+				weightIdx++
+			}
+		}
+		l.Input.PropagateGradient(downstream, g)
+	}
+}
+
+type layerRResult struct {
+	Layer      *Layer
+	RWeights   *autofunc.RVariable
+	RBiases    *autofunc.RVariable
+	OutputVec  linalg.Vector
+	ROutputVec linalg.Vector
+	Input      autofunc.RResult
+}
+
+func (l *layerRResult) Output() linalg.Vector {
+	return l.OutputVec
+}
+
+func (l *layerRResult) ROutput() linalg.Vector {
+	return l.ROutputVec
+}
+
+func (l *layerRResult) Constant(rg autofunc.RGradient, g autofunc.Gradient) bool {
+	return l.RWeights.Constant(rg, g) && l.RBiases.Constant(rg, g) &&
+		l.Input.Constant(rg, g)
+}
+
+func (l *layerRResult) PropagateRGradient(u, uR linalg.Vector, rg autofunc.RGradient,
+	g autofunc.Gradient) {
+	if g == nil {
+		g = autofunc.Gradient{}
+	}
+	l.RBiases.PropagateRGradient(u, uR, rg, g)
+	if gradVec, ok := g[l.Layer.Weights]; ok {
+		inputs := l.Input.Output()
+		var weightIdx int
+		for outIdx, indices := range l.Layer.Indices {
+			outDeriv := u[outIdx]
+			for _, inIdx := range indices {
+				gradVec[weightIdx] += inputs[inIdx] * outDeriv
+				weightIdx++
+			}
+		}
+	}
+	if rgradVec, ok := rg[l.Layer.Weights]; ok {
+		inputs := l.Input.Output()
+		inputsR := l.Input.ROutput()
+		var weightIdx int
+		for outIdx, indices := range l.Layer.Indices {
+			outDeriv := u[outIdx]
+			outDerivR := uR[outIdx]
+			for _, inIdx := range indices {
+				rgradVec[weightIdx] += inputs[inIdx]*outDerivR + inputsR[inIdx]*outDeriv
+				weightIdx++
+			}
+		}
+	}
+	if !l.Input.Constant(rg, g) {
+		downstream := make(linalg.Vector, len(l.Input.Output()))
+		downstreamR := make(linalg.Vector, len(downstream))
+		var weightIdx int
+		weights := l.RWeights.Output()
+		weightsR := l.RWeights.ROutput()
+		for outIdx, indices := range l.Layer.Indices {
+			outDeriv := u[outIdx]
+			outDerivR := uR[outIdx]
+			for _, inIdx := range indices {
+				downstream[inIdx] += weights[weightIdx] * outDeriv
+				downstreamR[inIdx] += weightsR[weightIdx]*outDeriv +
+					weights[weightIdx]*outDerivR
+				weightIdx++
+			}
+		}
+		l.Input.PropagateRGradient(downstream, downstreamR, rg, g)
+	}
 }
