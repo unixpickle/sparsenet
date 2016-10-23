@@ -2,61 +2,52 @@ package sparsenet
 
 import (
 	"math/rand"
-
-	"github.com/unixpickle/autofunc"
+	"sort"
 )
 
 // A chooser selects numbers in a biased fashion.
 type chooser struct {
-	Indices     []int
-	Weights     []float64
-	TotalWeight float64
+	Indices []int
 }
 
 func newUniformChooser(count int) *chooser {
-	res := &chooser{
-		Indices:     make([]int, count),
-		Weights:     make([]float64, count),
-		TotalWeight: float64(count),
-	}
-	for i := 0; i < count; i++ {
-		res.Indices[i] = i
-		res.Weights[i] = 1
-	}
-	return res
+	return &chooser{Indices: rand.Perm(count)}
 }
 
 func newSpatialChooser(in []*Coordinate, c *Coordinate, spread float64) *chooser {
-	invDist := make([]float64, len(in))
+	distances := make([]float64, len(in))
 	indices := make([]int, len(in))
 	for i, inCoord := range in {
-		invDist[i] = 1 / Distance(inCoord, c)
+		distances[i] = Distance(inCoord, c) + rand.NormFloat64()*spread
 		indices[i] = i
 	}
-	sm := autofunc.Softmax{Temperature: spread}
-	softmaxed := sm.Apply(&autofunc.Variable{Vector: invDist}).Output()
-	return &chooser{
-		Indices:     indices,
-		Weights:     softmaxed,
-		TotalWeight: 1,
-	}
+	sorter := indexSorter{Indices: indices, Values: distances}
+	sort.Sort(&sorter)
+	return &chooser{Indices: indices}
 }
 
 // Choose picks a random index in a biased fashion.
 // The returned index is removed from the chooser.
 func (c *chooser) Choose() int {
-	n := rand.Float64() * c.TotalWeight
-	for i, w := range c.Weights {
-		n -= w
-		if n < 0 || i == len(c.Weights)-1 {
-			res := c.Indices[i]
-			c.Indices[i] = c.Indices[len(c.Indices)-1]
-			c.Weights[i] = c.Weights[len(c.Weights)-1]
-			c.Indices = c.Indices[:len(c.Indices)-1]
-			c.Weights = c.Weights[:len(c.Weights)-1]
-			c.TotalWeight -= w
-			return res
-		}
-	}
-	panic("code unreachable")
+	res := c.Indices[0]
+	c.Indices = c.Indices[1:]
+	return res
+}
+
+type indexSorter struct {
+	Indices []int
+	Values  []float64
+}
+
+func (i *indexSorter) Len() int {
+	return len(i.Indices)
+}
+
+func (i *indexSorter) Swap(j, k int) {
+	i.Indices[j], i.Indices[k] = i.Indices[k], i.Indices[j]
+	i.Values[j], i.Values[k] = i.Values[k], i.Values[j]
+}
+
+func (i *indexSorter) Less(j, k int) bool {
+	return i.Values[j] < i.Values[k]
 }

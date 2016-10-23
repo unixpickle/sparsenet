@@ -61,7 +61,7 @@ func DeserializeLayer(d []byte) (*Layer, error) {
 // sparse connections.
 // This is for creating the first layer of a network.
 func NewLayerUnbiased(inCount, outCount, connCount int) *Layer {
-	if connCount > inCount || connCount > outCount {
+	if connCount > inCount {
 		panic("cannot mave more connections than neurons")
 	}
 	res := &Layer{
@@ -99,11 +99,11 @@ func NewLayerUnbiased(inCount, outCount, connCount int) *Layer {
 //
 // The spread argument specifies how spread out the
 // connections should be.
-// A low value (e.g. 1) indices that connections should
-// be somewhat localized, while a higher value (e.g. 5)
+// A low value (e.g. 0.01) indices that connections should
+// be somewhat localized, while a higher value (e.g. 1)
 // indices that the connections should be more random.
 func NewLayer(in *Layer, outCount, connCount int, spread float64) *Layer {
-	if connCount > len(in.Coords) || connCount > outCount {
+	if connCount > len(in.Coords) {
 		panic("cannot mave more connections than neurons")
 	}
 	res := &Layer{
