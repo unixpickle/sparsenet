@@ -18,7 +18,7 @@ import (
 const (
 	HiddenSize = 300
 	LabelCount = 10
-	StepSize   = 1e-2
+	StepSize   = 1e-3
 	BatchSize  = 20
 )
 
@@ -45,11 +45,11 @@ func main() {
 
 func createNet(d mnist.DataSet) neuralnet.Network {
 	layer1 := sparsenet.NewLayerUnbiased(28*28, 1000, 100)
-	layer2 := sparsenet.NewLayer(layer1, 2000, 30, 1)
-	layer3 := sparsenet.NewLayer(layer2, 3000, 20, 0.8)
-	layer4 := sparsenet.NewLayer(layer3, 5000, 10, 0.3)
-	layer5 := sparsenet.NewLayer(layer4, 2000, 10, 0.5)
-	layer6 := sparsenet.NewLayer(layer5, 500, 50, 1)
+	layer2 := sparsenet.NewLayer(layer1, 2000, 30, 0.01)
+	layer3 := sparsenet.NewLayer(layer2, 3000, 20, 0.01)
+	layer4 := sparsenet.NewLayer(layer3, 5000, 10, 0.001)
+	layer5 := sparsenet.NewLayer(layer4, 2000, 10, 0.01)
+	layer6 := sparsenet.NewLayer(layer5, 500, 50, 0.01)
 	outLayer := &neuralnet.DenseLayer{
 		InputCount:  500,
 		OutputCount: 10,
@@ -57,17 +57,17 @@ func createNet(d mnist.DataSet) neuralnet.Network {
 	outLayer.Randomize()
 	return neuralnet.Network{
 		layer1,
-		neuralnet.ReLU{},
+		neuralnet.Sigmoid{},
 		layer2,
-		neuralnet.ReLU{},
+		neuralnet.HyperbolicTangent{},
 		layer3,
-		neuralnet.ReLU{},
+		neuralnet.HyperbolicTangent{},
 		layer4,
-		neuralnet.ReLU{},
+		neuralnet.HyperbolicTangent{},
 		layer5,
-		neuralnet.ReLU{},
+		neuralnet.HyperbolicTangent{},
 		layer6,
-		neuralnet.ReLU{},
+		neuralnet.Sigmoid{},
 		outLayer,
 		&neuralnet.LogSoftmaxLayer{},
 	}
